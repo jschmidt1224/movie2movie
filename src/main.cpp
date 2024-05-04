@@ -102,7 +102,7 @@ int main() {
     // cout << k << " " << v.name << endl;
     v.node = add_vertex(k, g);
   }
-
+  count = 0;
   for (auto it = names.begin(); it != names.end(); it++) {
     // cout << it->second.name << endl;
     for (auto it1 = it->second.movies.begin(); it1 != it->second.movies.end();
@@ -111,9 +111,11 @@ int main() {
         // std::cout << (*it).second.name << ": {" << (*it1) << ", " << (*it2)
         //           << "}" << std::endl;
         add_edge(movies[*it1].node, movies[*it2].node, g);
+        count++;
       }
     }
   }
+  cout << "Edges: " << count << endl;
 
   return 0;
 }
