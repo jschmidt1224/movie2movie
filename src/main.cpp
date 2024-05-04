@@ -2,7 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <list>
-#include <map>
+#include <unordered_map>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -28,7 +28,7 @@ int main()
 
   ifstream fTitles("imdb_data/title.basics.movie.tsv");
   ifstream fNames("imdb_data/name.basics.tsv");
-  ifstream fRoles("imdb_data/title.principals.tsv");
+  ifstream fRoles("imdb_data/title.principals.roles.tsv");
   string line;
   int count = 0;
 
@@ -37,8 +37,8 @@ int main()
     cout << "Unable to open file!\n";
   }
 
-  map<movieId, Movie> movies;
-  map<actorId, Name> names;
+  unordered_map<movieId, Movie> movies;
+  unordered_map<actorId, Name> names;
   string header;
   getline(fTitles, header);
 
@@ -54,7 +54,6 @@ int main()
       name += "(" + columns[3] + ")";
     }
     movies.insert({id, Movie(id, name)});
-    // cout << line << endl;
     count++;
   }
   fTitles.close();
@@ -72,21 +71,16 @@ int main()
     // If movie id is not in movies
     if (movies.find(mid) != movies.end())
     {
-      if (r == "actor" || r == "actress" || r == "director")
-      {
-        // If actor id is not in names add it
-        if (names.find(aid) == names.end())
-          names[aid] = Name(aid);
-        names[aid].movies.insert(mid);
-        count++;
-      }
+      // If actor id is not in names add it
+      if (names.find(aid) == names.end())
+        names[aid] = Name(aid);
+      names[aid].movies.insert(mid);
+      count++;
     }
-    // cout << line << endl;
   }
   fRoles.close();
-
   cout << "Roles: " << count << endl;
-  return 0;
+  count = 0;
 
   while (getline(fNames, line))
   {
@@ -102,5 +96,5 @@ int main()
   }
   fNames.close();
   cout << "Names: " << count << endl;
-  count = 0;
+  return 0;
 }
