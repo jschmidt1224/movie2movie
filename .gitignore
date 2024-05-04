@@ -6,3 +6,5 @@
 !*Makefile
 !.gitignore
 !*.py
+!*.sh
+!*.md
