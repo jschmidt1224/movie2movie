@@ -9,12 +9,11 @@
 
 typedef string actorId;
 
-class Name
-{
+class Name {
 public:
-  Name(actorId _id, string _name);
-  Name(actorId _id);
-  Name();
+  Name(actorId _id, string _name) : id(_id), name(_name){};
+  Name(actorId _id) : Name(_id, ""){};
+  Name() : Name("tt0", ""){};
   actorId id;
   string name;
   unordered_set<movieId> movies;
