@@ -10,10 +10,10 @@
 class Link;
 
 using namespace std;
-using boost::adjacency_list, boost::vecS, boost::bidirectionalS;
+using boost::adjacency_list, boost::vecS, boost::undirectedS;
 
 typedef string movieId;
-typedef adjacency_list<vecS, vecS, bidirectionalS, movieId, Link> graph;
+typedef adjacency_list<vecS, vecS, undirectedS, movieId, Link> graph;
 typedef graph::vertex_descriptor gnode_descr;
 
 class Movie {

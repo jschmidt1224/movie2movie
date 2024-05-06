@@ -7,8 +7,8 @@
 class Link {
 public:
   Link(actorId n, float w) : id(n), weight(w){};
-  Link(actorId n) : Link(n, 0){};
-  Link() : Link("", 0){};
+  Link(actorId n) : Link(n, 1){};
+  Link() : Link(""){};
   actorId id;
   float weight;
 };
