@@ -1,8 +1,14 @@
 
+#include <boost/algorithm/string.hpp>
+#include <boost/archive/text_iarchive.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/serialization/library_version_type.hpp>
+#include <boost/serialization/unordered_map.hpp>
+#include <boost/serialization/unordered_set.hpp>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
 
 #include "db.h"
 #include "movie.h"
@@ -10,15 +16,6 @@
 
 using boost::vertex_index, boost::predecessor_map;
 using std::cout;
-
-inline vector<string> split(string s) {
-  stringstream ss(s);
-  string tmp;
-  vector<string> columns;
-  while (getline(ss, tmp, '\t'))
-    columns.push_back(tmp);
-  return columns;
-}
 
 void Db::build_movies() {
   ifstream fTitles("imdb_data/title.basics.movie.tsv");
@@ -29,14 +26,19 @@ void Db::build_movies() {
 
   // Reading Titles file
   while (getline(fTitles, line)) {
-    vector<string> columns = split(line);
+    vector<string> columns;
+    boost::split(columns, line, boost::is_any_of("\t"));
 
     movieId id = columns[0];
     string name = columns[2];
+    int year = 0;
+    cout << columns[5] << endl;
+    if (columns[5] != "\\N")
+      year = stoi(columns[5]);
     if (columns[3] != name) {
       name += "(" + columns[3] + ")";
     }
-    movies.insert({id, Movie(id, name)});
+    movies.insert({id, Movie(id, name, year)});
     count++;
   }
   fTitles.close();
@@ -51,7 +53,8 @@ void Db::build_principals() {
   getline(fRoles, header);
 
   while (getline(fRoles, line)) {
-    vector<string> columns = split(line);
+    vector<string> columns;
+    boost::split(columns, line, boost::is_any_of("\t"));
 
     movieId mid = columns[0];
     actorId aid = columns[2];
@@ -77,7 +80,8 @@ void Db::build_names() {
   getline(fNames, header);
 
   while (getline(fNames, line)) {
-    vector<string> columns = split(line);
+    vector<string> columns;
+    boost::split(columns, line, boost::is_any_of("\t"));
 
     actorId id = columns[0];
     string name = columns[1];
@@ -88,6 +92,49 @@ void Db::build_names() {
   }
   fNames.close();
   cout << "Names: " << count << endl;
+}
+
+void Db::build_db() {
+  build_movies();
+  build_principals();
+  build_names();
+}
+
+void Db::save_db() {
+  ofstream of("movie_cast.db");
+  boost::archive::text_oarchive oa(of);
+  oa << movies;
+  oa << names;
+  of.close();
+}
+
+void Db::load_db() {
+  ifstream inf("movie_cast.db");
+  boost::archive::text_iarchive ia(inf);
+  ia >> movies;
+  ia >> names;
+  inf.close();
+}
+
+void Db::save_graph() {
+  ofstream of("movie_cast.graph");
+  boost::archive::text_oarchive oa(of);
+  oa << movies;
+  oa << names;
+  of.close();
+}
+
+void Db::load_graph() {
+  ifstream inf("movie_cast.graph");
+  boost::archive::text_iarchive ia(inf);
+  ia >> movies;
+  ia >> names;
+  inf.close();
+}
+
+void Db::load() {
+  load_db();
+  load_graph();
 }
 
 void Db::build_graph() {
@@ -114,12 +161,11 @@ void Db::build_graph() {
   cout << "Edges: " << count << endl;
 }
 
-void Db::solve_graph(gnode_descr _start) {
+void Db::solve_graph() {
   // cout << "Start node" << _start << " " << movies[g[_start]].name << endl;
   predecessors = vector<gnode_descr>(num_vertices(g));
   distances = vector<float>(num_vertices(g));
   auto weight_map = get(&Link::weight, g);
-  start = _start;
   cout << "Starting solver\n";
   dijkstra_shortest_paths(
       g, start,
@@ -178,4 +224,64 @@ vector<actorId> Db::get_edges_between(gnode_descr a, gnode_descr b) {
     }
   }
   return r;
+}
+
+void Db::show_results() {
+  int i = 0;
+  for (auto &mId : results) {
+    Movie &m = movies[mId];
+    cout << i << "\t" << m.id << "\t" << m.name << "\t" << m.year << endl;
+    i++;
+  }
+}
+
+void Db::search(vector<string> args) {
+  string name_filt = "";
+  if (args.size() > 0) {
+    name_filt = args[0];
+  }
+  results.clear();
+  for (auto &m : movies) {
+    if (boost::icontains(m.second.name, name_filt)) {
+      results.push_back(m.second.id);
+    }
+  }
+  show_results();
+}
+
+void Db::filter(vector<string> args) {
+  string name_filt = "";
+  if (args.size() > 0) {
+    name_filt = args[0];
+  }
+  vector<movieId>::iterator it = results.begin();
+  while (it != results.end()) {
+    if (boost::icontains(movies[*it].name, name_filt)) {
+      it++;
+    } else {
+      it = results.erase(it);
+    }
+  }
+}
+
+void Db::set_start(vector<string> args) {
+  if (args.size() > 0) {
+    try {
+      if (boost::starts_with(args[0], "tt")) {
+        start = movies.at(args[0]).node;
+      } else {
+
+        unsigned long index = stoul(args[0]);
+        if (index < results.size()) {
+          start = movies.at(results[index]).node;
+        } else {
+          cout << "Out of results range (" << results.size() << ")\n";
+        }
+      }
+    } catch (std::invalid_argument const &e) {
+      cout << "Not an integer\n";
+    } catch (std::out_of_range const &e) {
+      cout << "Out of range\n";
+    }
+  }
 }
