@@ -279,9 +279,9 @@ void Db::set_start(vector<string> args) {
         }
       }
     } catch (std::invalid_argument const &e) {
-      cout << "Not an integer\n";
+      cout << args[0] << "not an integer\n";
     } catch (std::out_of_range const &e) {
-      cout << "Out of range\n";
+      cout << args[0] << " not found\n";
     }
   }
 }

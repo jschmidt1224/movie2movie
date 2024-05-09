@@ -11,6 +11,7 @@ using std::string, std::map, std::function, std::vector;
 
 class CommandConsole {
 public:
+  CommandConsole(string pre);
   CommandConsole();
   ~CommandConsole();
   void start();

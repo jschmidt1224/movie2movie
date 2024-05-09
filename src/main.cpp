@@ -25,7 +25,7 @@ inline vector<string> split(string s) {
 
 int main(int argc, char **argv) {
   Db db;
-  CommandConsole console;
+  CommandConsole console("m2m $");
   console.insert("build_db", std::bind(&Db::build_db, &db));
   console.insert("build_graph", std::bind(&Db::build_graph, &db));
   console.insert("save_db", std::bind(&Db::save_db, &db));
@@ -36,6 +36,9 @@ int main(int argc, char **argv) {
   console.insert("search", std::bind(&Db::search, &db, std::placeholders::_1));
   console.insert("show_results", std::bind(&Db::show_results, &db));
   console.insert("filter", std::bind(&Db::filter, &db, std::placeholders::_1));
+  console.insert("set_start",
+                 std::bind(&Db::set_start, &db, std::placeholders::_1));
+
   console.start();
   return 0;
   db.build_movies();

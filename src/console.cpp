@@ -28,8 +28,8 @@ static void echo(vector<string> args) {
   }
 }
 
-CommandConsole::CommandConsole() {
-  conPrefix = "Shell>";
+CommandConsole::CommandConsole(string pre) {
+  conPrefix = pre;
   comMap.insert(pair{"echo", &echo});
   function<void(vector<string>)> e =
       bind(&CommandConsole::exit, this, std::placeholders::_1);
@@ -37,6 +37,8 @@ CommandConsole::CommandConsole() {
   comMap.insert(pair{"quit", e});
   running = false;
 }
+
+CommandConsole::CommandConsole() : CommandConsole("Shell>") {}
 
 CommandConsole::~CommandConsole() {}
 
