@@ -30,6 +30,11 @@ public:
   int year;
   float rating;
   gnode_descr node;
+
+  friend std::ostream &operator<<(std::ostream &os, const Movie &m) {
+    os << m.id << ",\"" << m.name << "\"," << m.year << "," << m.rating;
+    return os;
+  }
 };
 
 namespace boost {

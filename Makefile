@@ -23,7 +23,7 @@ CPPFLAGS =  -Wall -g -std=c++17
 CFLAGS = -Wall -g -std=c2x
 
 # Linker Stuff
-LDFLAGS+= -lm -lboost_serialization
+LDFLAGS+= -lm -lboost_serialization -lcurl
 
 # Autogen
 

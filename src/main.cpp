@@ -13,15 +13,7 @@
 #include "console.h"
 #include "db.h"
 #include "movie.h"
-
-inline vector<string> split(string s) {
-  stringstream ss(s);
-  string tmp;
-  vector<string> columns;
-  while (getline(ss, tmp, '\t'))
-    columns.push_back(tmp);
-  return columns;
-}
+#include "tmdb_con.h"
 
 int main(int argc, char **argv) {
   Db db;
@@ -38,24 +30,21 @@ int main(int argc, char **argv) {
   console.insert("filter", std::bind(&Db::filter, &db, std::placeholders::_1));
   console.insert("set_start",
                  std::bind(&Db::set_start, &db, std::placeholders::_1));
-
+  TMDBConnection tmdb;
+  tmdb.get(TMDBConnection::base_url +
+           "discover/"
+           "movie?include_adult=false&include_video=false&language=en-US&page="
+           "1&sort_by=vote_count.desc");
   console.start();
   return 0;
-  db.build_movies();
-  db.build_principals();
-  db.build_names();
-  if (argc >= 3) {
-    movieId start = argv[1]; // "tt27304026";
-    movieId end = argv[2];   // "tt0106489";
-    cout << "Start " << db.movies[start].name << endl;
-    cout << "End " << db.movies[end].name << endl;
-    std::ofstream test("test.txt");
-    boost::archive::text_oarchive t(test);
-    t << db.movies[start];
-    db.start = db.get_node(start);
-    db.build_graph();
-    db.solve_graph();
-    db.print_path(db.get_node(end));
-  }
-  return 0;
 }
+
+// TODOs
+// 1 Redo save maps to csv
+// 2 Redo load maps to use rapidcsv
+// 3 Add date touched to movies and actors
+// 4 Add sort by date touched
+// 5 Add commands to start update threads
+// 6 Add update thread to loop through movies and get movie details, cast and
+// cast details
+//

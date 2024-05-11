@@ -18,6 +18,15 @@ public:
   actorId id;
   string name;
   unordered_set<movieId> movies;
+
+  friend std::ostream &operator<<(std::ostream &os, const Name &n) {
+    os << n.id << ",\"" << n.name << "\",[";
+    for (auto m : n.movies) {
+      os << m << ";";
+    }
+    os << "]";
+    return os;
+  }
 };
 
 namespace boost {
