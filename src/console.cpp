@@ -36,6 +36,7 @@ CommandConsole::CommandConsole(string pre) {
   comMap.insert(pair{"exit", e});
   comMap.insert(pair{"quit", e});
   running = false;
+  cleanup = NULL;
 }
 
 CommandConsole::CommandConsole() : CommandConsole("Shell>") {}
@@ -64,6 +65,9 @@ void CommandConsole::start() {
     cout << conPrefix;
     getline(cin, in);
     run(in);
+  }
+  if (cleanup) {
+    cleanup();
   }
 }
 

@@ -18,11 +18,13 @@ public:
   void run(string text);
   void exit(vector<string>);
   void insert(string, function<void(vector<string>)>);
+  void set_cleanup(function<void(void)>);
   map<string, function<void(vector<string>)>> comMap;
 
 private:
   string conPrefix;
   bool running;
+  function<void(void)> cleanup;
 };
 
 #endif

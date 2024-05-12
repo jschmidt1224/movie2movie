@@ -1,8 +1,11 @@
 
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/archive/text_iarchive.hpp>
+#include <boost/graph/adj_list_serialize.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/range/algorithm/replace_if.hpp>
 #include <boost/serialization/library_version_type.hpp>
 #include <boost/serialization/unordered_map.hpp>
 #include <boost/serialization/unordered_set.hpp>
@@ -10,12 +13,28 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "rapidcsv/rapidcsv.h"
+
 #include "db.h"
 #include "movie.h"
 #include "name.h"
 
 using boost::vertex_index, boost::predecessor_map;
 using std::cout;
+
+template <typename T> vector<T> split_csvlist(string l) {
+  vector<T> s;
+  boost::split(s, l, boost::is_any_of(";"));
+  return s;
+}
+
+Db::~Db() {
+  movies.clear();
+  names.clear();
+  g.m_edges.clear();
+  g.m_vertices.clear();
+  g.clear();
+}
 
 void Db::build_movies() {
   ifstream fTitles("imdb_data/title.basics.movie.tsv");
@@ -31,14 +50,16 @@ void Db::build_movies() {
 
     movieId id = columns[0];
     string name = columns[2];
+    boost::replace_if(name, boost::is_any_of("\"\n\r"), ' ');
     int year = 0;
-    cout << columns[5] << endl;
     if (columns[5] != "\\N")
       year = stoi(columns[5]);
     if (columns[3] != name) {
       name += "(" + columns[3] + ")";
     }
+    map_mutex.lock();
     movies.insert({id, Movie(id, name, year)});
+    map_mutex.unlock();
     count++;
   }
   fTitles.close();
@@ -60,13 +81,16 @@ void Db::build_principals() {
     actorId aid = columns[2];
     string r = columns[3];
     // If movie id is not in movies
+    map_mutex.lock();
     if (movies.find(mid) != movies.end()) {
       // If actor id is not in names add it
       if (names.find(aid) == names.end())
         names[aid] = Name(aid);
       names[aid].movies.insert(mid);
+      movies[mid].cast.insert(aid);
       count++;
     }
+    map_mutex.unlock();
   }
   fRoles.close();
   cout << "Roles: " << count << endl;
@@ -85,8 +109,11 @@ void Db::build_names() {
 
     actorId id = columns[0];
     string name = columns[1];
+    boost::replace_if(name, boost::is_any_of("\"'\n\r,"), ' ');
     if (names.find(id) != names.end()) {
+      map_mutex.lock();
       names[id].name = name;
+      map_mutex.unlock();
       count++;
     }
   }
@@ -101,34 +128,99 @@ void Db::build_db() {
 }
 
 void Db::save_db() {
-  ofstream of("movie_cast.db");
-  boost::archive::text_oarchive oa(of);
-  oa << movies;
-  oa << names;
+  cout << "Saving..." << endl;
+  multimap<int, movieId> byYear;
+  set<int> years;
+  map_mutex.lock();
+  for (auto &[k, m] : movies) {
+    byYear.insert(std::make_pair(m.year, k));
+    years.insert(m.year);
+  }
+  map_mutex.unlock();
+  ofstream of("csv_data/tt.csv");
+  of << "id,name,year,rating,node,tmdb_update,cast" << endl;
+  for (auto &y : years) {
+    auto range = byYear.equal_range(y);
+    for (auto it = range.first; it != range.second; it++) {
+      map_mutex.lock();
+      of << movies[it->second] << endl;
+      map_mutex.unlock();
+    }
+  }
   of.close();
+  of.open("csv_data/nm.csv");
+  of << "id,name,movies" << endl;
+  map_mutex.lock();
+  for (auto &[k, a] : names) {
+    of << a << endl;
+  }
+  map_mutex.unlock();
+  of.close();
+  // ofstream of("movie_cast.db");
+  // boost::archive::text_oarchive oa(of);
+  // oa << movies;
+  // oa << names;
+  // of.close();
 }
 
+// void Db::load_db() {
+//   ifstream inf("movie_cast.db");
+//   boost::archive::text_iarchive ia(inf);
+//   ia >> movies;
+//   ia >> names;
+//   inf.close();
+// }
+
 void Db::load_db() {
-  ifstream inf("movie_cast.db");
-  boost::archive::text_iarchive ia(inf);
-  ia >> movies;
-  ia >> names;
-  inf.close();
+  int count = 0;
+  string fpath = "csv_data/tt.csv";
+  rapidcsv::Document d(fpath);
+  for (unsigned long i = 0; i < d.GetRowCount(); i++) {
+    movieId id = d.GetCell<string>("id", i);
+    string name = d.GetCell<string>("name", i);
+    int year = d.GetCell<int>("year", i);
+    int rating = d.GetCell<int>("rating", i);
+    string sActors = d.GetCell<string>("cast", i);
+    unsigned long node = d.GetCell<unsigned long>("node", i);
+    vector<actorId> lActors = split_csvlist<actorId>(sActors);
+    map_mutex.lock();
+    movies[id] = Movie(id, name, year, rating);
+    movies[id].cast.insert(lActors.begin(), lActors.end());
+    movies[id].node = node;
+    map_mutex.unlock();
+    count++;
+  }
+  d.Clear();
+  cout << "Titles: " << count << endl;
+  fpath = "csv_data/nm.csv";
+  d.Load(fpath);
+  count = 0;
+  for (unsigned long i = 0; i < d.GetRowCount(); i++) {
+    actorId id = d.GetCell<string>("id", i);
+    string name = d.GetCell<string>("name", i);
+    string sMovies = d.GetCell<string>("movies", i);
+    vector<movieId> lMovies = split_csvlist<movieId>(sMovies);
+    map_mutex.lock();
+    names[id] = Name(id, name);
+    names[id].movies.insert(lMovies.begin(), lMovies.end());
+    map_mutex.unlock();
+    count++;
+  }
+  d.Clear();
+  cout << "Names: " << count << endl;
 }
 
 void Db::save_graph() {
   ofstream of("movie_cast.graph");
   boost::archive::text_oarchive oa(of);
-  oa << movies;
-  oa << names;
+  oa << g;
   of.close();
 }
 
 void Db::load_graph() {
   ifstream inf("movie_cast.graph");
   boost::archive::text_iarchive ia(inf);
-  ia >> movies;
-  ia >> names;
+  ia >> g;
   inf.close();
 }
 
@@ -137,8 +229,16 @@ void Db::load() {
   load_graph();
 }
 
+void Db::save() {
+  save_db();
+  save_graph();
+}
+
 void Db::build_graph() {
   cout << "Building Graph" << endl;
+  g.m_edges.clear();
+  g.m_vertices.clear();
+  g.clear();
   for (auto [k, v] : movies) {
     // cout << v.name << endl;
     movies[k].node = add_vertex(k, g);
@@ -177,6 +277,13 @@ void Db::solve_graph() {
   // cout << "Done solving\n";
 }
 
+void Db::solve() {
+  if (start != 0 || end != 0) {
+    solve_graph();
+    print_path(end);
+  }
+}
+
 void Db::print_path(gnode_descr end) {
   // cout << "End node" << end << " " << movies[g[end]].name << endl;
   gnode_descr n = end;
@@ -187,14 +294,14 @@ void Db::print_path(gnode_descr end) {
       break;
 
     vector<actorId> actors = get_edges_between(n, predecessors[n]);
-    cout << "<-(";
+    cout << "->(";
     for (auto a : actors) {
       cout << names[a].name << ",";
     }
-    cout << ")<-";
+    cout << ")->";
     n = predecessors[n];
   }
-  cout << endl << "Count: " << i;
+  cout << endl << "Count: " << i << endl;
 }
 
 gnode_descr Db::get_node(movieId mId) { return movies[mId].node; }
@@ -233,6 +340,13 @@ void Db::show_results() {
     cout << i << "\t" << m.id << "\t" << m.name << "\t" << m.year << endl;
     i++;
   }
+  if (end < num_vertices(g)) {
+    cout << "Current Start: " << g[end] << ", " << movies[g[end]].name << endl;
+  }
+  if (start < num_vertices(g)) {
+    cout << "Current End:   " << g[start] << ", " << movies[g[start]].name
+         << endl;
+  }
 }
 
 void Db::search(vector<string> args) {
@@ -262,9 +376,31 @@ void Db::filter(vector<string> args) {
       it = results.erase(it);
     }
   }
+  show_results();
 }
 
 void Db::set_start(vector<string> args) {
+  if (args.size() > 0) {
+    try {
+      if (boost::starts_with(args[0], "tt")) {
+        end = movies.at(args[0]).node;
+      } else {
+        unsigned long index = stoul(args[0]);
+        if (index < results.size()) {
+          end = movies.at(results[index]).node;
+        } else {
+          cout << "Out of results range (" << results.size() << ")\n";
+        }
+      }
+    } catch (std::invalid_argument const &e) {
+      cout << args[0] << "not an integer\n";
+    } catch (std::out_of_range const &e) {
+      cout << args[0] << " not found\n";
+    }
+  }
+}
+
+void Db::set_end(vector<string> args) {
   if (args.size() > 0) {
     try {
       if (boost::starts_with(args[0], "tt")) {

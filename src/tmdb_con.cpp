@@ -12,7 +12,7 @@ string TMDBConnection::base_url = string("https://api.themoviedb.org/3/");
 TMDBConnection::TMDBConnection() {
   hnd = curl_easy_init();
   headers = NULL;
-  ifstream inf("tmdb_data/read_access.token");
+  ifstream inf("tmdb/read.token");
   string auth;
   inf >> auth;
   inf.close();
