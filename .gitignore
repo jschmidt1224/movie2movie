@@ -5,6 +5,7 @@
 !*.h
 !*Makefile
 !.gitignore
+!.clang-format
 !*.py
 !*.sh
 !*.md

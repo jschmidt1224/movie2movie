@@ -7,9 +7,11 @@
 #include <unordered_map>
 #include <vector>
 
+#include "console.h"
 #include "link.h"
 #include "movie.h"
 #include "name.h"
+#include "tmdb_con.h"
 
 typedef adjacency_list<vecS, vecS, undirectedS, movieId, Link> graph_t;
 typedef graph_t::vertex_descriptor gnode_descr;
@@ -19,17 +21,19 @@ using std::thread, std::mutex;
 class Db {
 public:
   Db()
-      : movies(), names(), g(), predecessors(), distances(), start(0), end(0),
-        results(), map_mutex(){};
+      : movies(), names(), names_tmdb(), g(), predecessors(), distances(), start(0), end(0), results(), tmdb(),
+        map_mutex(){};
   ~Db();
   unordered_map<movieId, Movie> movies;
   unordered_map<actorId, Name> names;
+  unordered_map<int, actorId> names_tmdb;
   graph_t g;
   vector<gnode_descr> predecessors;
   vector<float> distances;
   gnode_descr start;
   gnode_descr end;
   vector<movieId> results;
+  TMDBConnection tmdb;
   thread update_existing;
   thread update_popular;
   mutex map_mutex;
@@ -57,6 +61,8 @@ public:
   void filter_year(vector<string> args);
   void set_start(vector<string> args);
   void set_end(vector<string> args);
+  void update_title(movieId mId);
+  void register_commands(CommandConsole &console);
   gnode_descr get_node(movieId mId);
   vector<actorId> get_edges(gnode_descr a);
   vector<actorId> get_edges_between(gnode_descr a, gnode_descr b);

@@ -12,15 +12,16 @@ typedef string actorId;
 
 class Name {
 public:
-  Name(actorId _id, string _name) : id(_id), name(_name){};
-  Name(actorId _id) : Name(_id, ""){};
-  Name() : Name("tt0", ""){};
+  Name(actorId _id, int _tmdb_id, string _name) : id(_id), tmdb_id(_tmdb_id), name(_name){};
+  Name(actorId _id) : Name(_id, 0, ""){};
+  Name() : Name("tt0"){};
   actorId id;
+  int tmdb_id;
   string name;
   unordered_set<movieId> movies;
 
   friend std::ostream &operator<<(std::ostream &os, const Name &n) {
-    os << n.id << ",\"" << n.name << "\",[";
+    os << n.id << "," << n.tmdb_id << ",\"" << n.name << "\",[";
     for (auto m : n.movies) {
       os << m << ";";
     }
@@ -28,18 +29,5 @@ public:
     return os;
   }
 };
-
-namespace boost {
-namespace serialization {
-
-template <class Archive>
-void serialize(Archive &ar, Name &n, const unsigned int version = 0) {
-  ar &n.id;
-  ar &n.name;
-  ar &n.movies;
-}
-
-} // namespace serialization
-} // namespace boost
 
 #endif // __NAME_H__

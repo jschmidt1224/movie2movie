@@ -10,6 +10,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <boost/json/src.hpp>
+
 #include "console.h"
 #include "db.h"
 #include "movie.h"
@@ -18,26 +20,7 @@
 int main(int argc, char **argv) {
   Db db;
   CommandConsole console("movie2movie$ ");
-  console.insert("build_db", std::bind(&Db::build_db, &db));
-  console.insert("build_graph", std::bind(&Db::build_graph, &db));
-  console.insert("save_db", std::bind(&Db::save_db, &db));
-  console.insert("load_db", std::bind(&Db::load_db, &db));
-  console.insert("save_graph", std::bind(&Db::save_graph, &db));
-  console.insert("load_graph", std::bind(&Db::load_graph, &db));
-  console.insert("load", std::bind(&Db::load, &db));
-  console.insert("save", std::bind(&Db::save, &db));
-  console.insert("search", std::bind(&Db::search, &db, std::placeholders::_1));
-  console.insert("show", std::bind(&Db::show_results, &db));
-  console.insert("solve", std::bind(&Db::solve, &db));
-  console.insert("filter", std::bind(&Db::filter, &db, std::placeholders::_1));
-  console.insert("start",
-                 std::bind(&Db::set_start, &db, std::placeholders::_1));
-  console.insert("end", std::bind(&Db::set_end, &db, std::placeholders::_1));
-  TMDBConnection tmdb;
-  // tmdb.get(TMDBConnection::base_url +
-  //          "discover/"
-  //          "movie?include_adult=false&include_video=false&language=en-US&page="
-  //          "1&sort_by=vote_count.desc");
+  db.register_commands(console);
   console.start();
   return 0;
 }

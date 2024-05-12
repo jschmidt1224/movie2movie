@@ -24,11 +24,12 @@ typedef string actorId;
 
 class Movie {
 public:
-  Movie(movieId _id, string _name, int _year, int _rating = 0)
-      : id(_id), name(_name), year(_year), rating(_rating), cast(), node(0),
-        tmdb_refresh(0){};
-  Movie() : Movie("", "", 0){};
+  Movie(movieId _id, int tmdb, string _name, int _year, int _rating = 0)
+      : id(_id), tmdb_id(tmdb), name(_name), year(_year), rating(_rating),
+        cast(), node(0), tmdb_refresh(0){};
+  Movie() : Movie("", 0, "", 0){};
   movieId id;
+  int tmdb_id;
   string name;
   int year;
   float rating;
@@ -37,8 +38,8 @@ public:
   time_t tmdb_refresh;
 
   friend std::ostream &operator<<(std::ostream &os, const Movie &m) {
-    os << m.id << ",\"" << m.name << "\"," << m.year << "," << m.rating << ","
-       << m.node << "," << m.tmdb_refresh << ",[";
+    os << m.id << "," << m.tmdb_id << ",\"" << m.name << "\"," << m.year << ","
+       << m.rating << "," << m.node << "," << m.tmdb_refresh << ",[";
     for (const actorId &a : m.cast) {
       os << a << ";";
     }
@@ -46,21 +47,5 @@ public:
     return os;
   }
 };
-
-namespace boost {
-namespace serialization {
-
-template <class Archive>
-void serialize(Archive &ar, Movie &m, const unsigned int version = 0) {
-  ar &m.id;
-  ar &m.name;
-  ar &m.year;
-  ar &m.rating;
-  ar &m.cast;
-  ar &m.node;
-}
-
-} // namespace serialization
-} // namespace boost
 
 #endif // __MOVIE_H__

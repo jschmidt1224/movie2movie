@@ -5,6 +5,8 @@
 #include <boost/graph/adj_list_serialize.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/dijkstra_shortest_paths.hpp>
+#include <boost/json.hpp>
+#include <boost/json/value.hpp>
 #include <boost/range/algorithm/replace_if.hpp>
 #include <boost/serialization/library_version_type.hpp>
 #include <boost/serialization/unordered_map.hpp>
@@ -15,6 +17,7 @@
 
 #include "rapidcsv/rapidcsv.h"
 
+#include "console.h"
 #include "db.h"
 #include "movie.h"
 #include "name.h"
@@ -58,7 +61,7 @@ void Db::build_movies() {
       name += "(" + columns[3] + ")";
     }
     map_mutex.lock();
-    movies.insert({id, Movie(id, name, year)});
+    movies.insert({id, Movie(id, 0, name, year)});
     map_mutex.unlock();
     count++;
   }
@@ -138,7 +141,7 @@ void Db::save_db() {
   }
   map_mutex.unlock();
   ofstream of("csv_data/tt.csv");
-  of << "id,name,year,rating,node,tmdb_update,cast" << endl;
+  of << "id,tmdb_id,name,year,rating,node,tmdb_update,cast" << endl;
   for (auto &y : years) {
     auto range = byYear.equal_range(y);
     for (auto it = range.first; it != range.second; it++) {
@@ -149,7 +152,7 @@ void Db::save_db() {
   }
   of.close();
   of.open("csv_data/nm.csv");
-  of << "id,name,movies" << endl;
+  of << "id,tmdb_id,name,movies" << endl;
   map_mutex.lock();
   for (auto &[k, a] : names) {
     of << a << endl;
@@ -177,6 +180,7 @@ void Db::load_db() {
   rapidcsv::Document d(fpath);
   for (unsigned long i = 0; i < d.GetRowCount(); i++) {
     movieId id = d.GetCell<string>("id", i);
+    int tmdb_id = d.GetCell<int>("tmdb_id", i);
     string name = d.GetCell<string>("name", i);
     int year = d.GetCell<int>("year", i);
     int rating = d.GetCell<int>("rating", i);
@@ -184,7 +188,7 @@ void Db::load_db() {
     unsigned long node = d.GetCell<unsigned long>("node", i);
     vector<actorId> lActors = split_csvlist<actorId>(sActors);
     map_mutex.lock();
-    movies[id] = Movie(id, name, year, rating);
+    movies[id] = Movie(id, tmdb_id, name, year, rating);
     movies[id].cast.insert(lActors.begin(), lActors.end());
     movies[id].node = node;
     map_mutex.unlock();
@@ -197,11 +201,15 @@ void Db::load_db() {
   count = 0;
   for (unsigned long i = 0; i < d.GetRowCount(); i++) {
     actorId id = d.GetCell<string>("id", i);
+    int tmdb_id = d.GetCell<int>("tmdb_id", i);
     string name = d.GetCell<string>("name", i);
     string sMovies = d.GetCell<string>("movies", i);
     vector<movieId> lMovies = split_csvlist<movieId>(sMovies);
     map_mutex.lock();
-    names[id] = Name(id, name);
+    names[id] = Name(id, tmdb_id, name);
+    if (tmdb_id != 0) {
+      names_tmdb[tmdb_id] = id;
+    }
     names[id].movies.insert(lMovies.begin(), lMovies.end());
     map_mutex.unlock();
     count++;
@@ -246,13 +254,11 @@ void Db::build_graph() {
   int count = 0;
   for (auto it = names.begin(); it != names.end(); it++) {
     // cout << it->second.name << endl;
-    for (auto it1 = it->second.movies.begin(); it1 != it->second.movies.end();
-         it1++) {
+    for (auto it1 = it->second.movies.begin(); it1 != it->second.movies.end(); it1++) {
       for (auto it2 = std::next(it1); it2 != it->second.movies.end(); it2++) {
         // std::cout << (*it).second.name << ": {" << (*it1) << ", " << (*it2)
         //           << "}" << std::endl;
-        add_edge(movies[*it1].node, movies[*it2].node, Link(it->second.id, 1),
-                 g);
+        add_edge(movies[*it1].node, movies[*it2].node, Link(it->second.id, 1), g);
         // add_edge(movies[*it2].node, movies[*it1].node, g);
         count++;
       }
@@ -267,13 +273,10 @@ void Db::solve_graph() {
   distances = vector<float>(num_vertices(g));
   auto weight_map = get(&Link::weight, g);
   cout << "Starting solver\n";
-  dijkstra_shortest_paths(
-      g, start,
-      predecessor_map(make_iterator_property_map(predecessors.begin(),
-                                                 get(vertex_index, g)))
-          .distance_map(make_iterator_property_map(distances.begin(),
-                                                   get(vertex_index, g)))
-          .weight_map(weight_map));
+  dijkstra_shortest_paths(g, start,
+                          predecessor_map(make_iterator_property_map(predecessors.begin(), get(vertex_index, g)))
+                              .distance_map(make_iterator_property_map(distances.begin(), get(vertex_index, g)))
+                              .weight_map(weight_map));
   // cout << "Done solving\n";
 }
 
@@ -312,8 +315,7 @@ vector<actorId> Db::get_edges(gnode_descr a) {
   for (boost::tie(ei, ei_end) = boost::out_edges(a, g); ei != ei_end; ei++) {
     gnode_descr target = boost::target(*ei, g);
     gnode_descr source = boost::source(*ei, g);
-    cout << movies[g[source]].name << "->" << names[g[*ei].id].name << "->"
-         << movies[g[target]].name << endl;
+    cout << movies[g[source]].name << "->" << names[g[*ei].id].name << "->" << movies[g[target]].name << endl;
 
     r.push_back(g[*ei].id);
   }
@@ -344,8 +346,7 @@ void Db::show_results() {
     cout << "Current Start: " << g[end] << ", " << movies[g[end]].name << endl;
   }
   if (start < num_vertices(g)) {
-    cout << "Current End:   " << g[start] << ", " << movies[g[start]].name
-         << endl;
+    cout << "Current End:   " << g[start] << ", " << movies[g[start]].name << endl;
   }
 }
 
@@ -420,4 +421,41 @@ void Db::set_end(vector<string> args) {
       cout << args[0] << " not found\n";
     }
   }
+}
+
+void Db::update_title(movieId mId) {
+  map_mutex.lock();
+  if (movies.find(mId) != movies.end()) {
+    if (movies[mId].tmdb_id == 0) {
+      map_mutex.unlock();
+      if (tmdb.get_imdb(mId) != 0)
+        return;
+      boost::json::value v = tmdb.parse_file("tmp/find.json");
+      map_mutex.lock();
+      movies[mId].tmdb_id = v.as_object()["movie_results"].as_array()[0].as_object()["id"].as_int64();
+    }
+    int id = movies[mId].tmdb_id;
+    map_mutex.unlock();
+    if (tmdb.get_cast(id) != 0)
+      return;
+    boost::json::value v = tmdb.parse_file("tmp/cast.json");
+  }
+  map_mutex.unlock();
+}
+
+void Db::register_commands(CommandConsole &console) {
+  console.insert("build_db", std::bind(&Db::build_db, this));
+  console.insert("build_graph", std::bind(&Db::build_graph, this));
+  console.insert("save_db", std::bind(&Db::save_db, this));
+  console.insert("load_db", std::bind(&Db::load_db, this));
+  console.insert("save_graph", std::bind(&Db::save_graph, this));
+  console.insert("load_graph", std::bind(&Db::load_graph, this));
+  console.insert("load", std::bind(&Db::load, this));
+  console.insert("save", std::bind(&Db::save, this));
+  console.insert("search", std::bind(&Db::search, this, std::placeholders::_1));
+  console.insert("show", std::bind(&Db::show_results, this));
+  console.insert("solve", std::bind(&Db::solve, this));
+  console.insert("filter", std::bind(&Db::filter, this, std::placeholders::_1));
+  console.insert("start", std::bind(&Db::set_start, this, std::placeholders::_1));
+  console.insert("end", std::bind(&Db::set_end, this, std::placeholders::_1));
 }
