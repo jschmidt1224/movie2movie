@@ -8,7 +8,7 @@ class Link {
 public:
   Link(actorId n, float w) : id(n), weight(w){};
   Link(actorId n) : Link(n, 1){};
-  Link() : Link(""){};
+  Link() : Link(0){};
   actorId id;
   float weight;
 };
@@ -16,8 +16,7 @@ public:
 namespace boost {
 namespace serialization {
 
-template <class Archive>
-void serialize(Archive &ar, Link &l, const unsigned int version = 0) {
+template <class Archive> void serialize(Archive &ar, Link &l, const unsigned int version = 0) {
   ar &l.id;
   ar &l.weight;
 }

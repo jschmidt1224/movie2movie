@@ -12,7 +12,7 @@
 
 using std::string, std::mutex, std::atomic_int, std::atomic_bool;
 
-typedef string movieId;
+typedef int movieId;
 
 class TMDBConnection {
 public:
@@ -21,9 +21,8 @@ public:
   int get(string url, FILE *f = stdout);
   int get(string url, string filename);
   int get_popmovies(int page = 1);
-  int get_imdb(movieId m);
   int get_cast(int id);
-  int get_person();
+  int get_person(int id);
   void count_func();
   boost::json::value parse_file(string fname);
   static string base_url;
@@ -32,7 +31,6 @@ private:
   CURL *hnd;
   mutex hnd_lock;
   curl_slist *headers;
-  boost::json::parser p;
 };
 
 #endif // __TMDB_CON_H__

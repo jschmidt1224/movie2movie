@@ -15,7 +15,7 @@ using std::ifstream, std::string, std::stringstream;
 
 string TMDBConnection::base_url = string("https://api.themoviedb.org/3/");
 
-TMDBConnection::TMDBConnection() : p() {
+TMDBConnection::TMDBConnection() {
   hnd_lock.lock();
   hnd = curl_easy_init();
   headers = NULL;
@@ -66,11 +66,22 @@ int TMDBConnection::get_imdb(movieId m) {
   return get(find, "tmp/find.json");
 }
 
-int TMDBConnection::get_cast(int id) { return 0; }
+int TMDBConnection::get_cast(int id) {
+  string cast = TMDBConnection::base_url;
+  cast += "movie/" + std::to_string(id) + "/credits?language=en-US";
+  return get(cast, "tmp/cast.json");
+}
+
+int TMDBConnection::get_person(int id) {
+  string person = TMDBConnection::base_url;
+  person += "person/" + std::to_string(id) + "?language=en-US";
+  return get(person, "tmp/person.json");
+}
 
 boost::json::value TMDBConnection::parse_file(string fname) {
   ifstream ifs(fname);
   stringstream buf;
   buf << ifs.rdbuf();
-  return p.write(buf.str());
+  std::cout << buf.str() << std::endl;
+  return boost::json::parse(buf.str());
 }

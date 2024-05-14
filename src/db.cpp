@@ -424,23 +424,59 @@ void Db::set_end(vector<string> args) {
 }
 
 void Db::update_title(movieId mId) {
+  cout << "Updating: " << mId << endl;
   map_mutex.lock();
-  if (movies.find(mId) != movies.end()) {
-    if (movies[mId].tmdb_id == 0) {
-      map_mutex.unlock();
-      if (tmdb.get_imdb(mId) != 0)
-        return;
-      boost::json::value v = tmdb.parse_file("tmp/find.json");
-      map_mutex.lock();
-      movies[mId].tmdb_id = v.as_object()["movie_results"].as_array()[0].as_object()["id"].as_int64();
-    }
-    int id = movies[mId].tmdb_id;
-    map_mutex.unlock();
-    if (tmdb.get_cast(id) != 0)
-      return;
-    boost::json::value v = tmdb.parse_file("tmp/cast.json");
-  }
+  int tId = movies[mId].tmdb_id;
   map_mutex.unlock();
+  if (tId == 0) {
+    if (tmdb.get_imdb(mId) != 0)
+      return;
+    boost::json::value v = tmdb.parse_file("tmp/find.json");
+    try {
+      auto &a = v.at("movie_results").as_array();
+      if (a.size() > 0) {
+        tId = a[0].at("id").as_int64();
+      } else {
+        cout << "Not found" << endl;
+        return;
+      }
+    } catch (exception &e) {
+      cout << "Exception " << e.what() << endl;
+      return;
+    }
+    map_mutex.lock();
+    movies[mId].tmdb_id = tId;
+    map_mutex.unlock();
+  }
+  cout << "Getting Cast: " << tId << endl;
+  if (tmdb.get_cast(tId) != 0)
+    return;
+  boost::json::value v = tmdb.parse_file("tmp/cast.json");
+  auto cast = v.as_object()["cast"].as_array();
+  for (auto &a : cast) {
+    cout << a << endl;
+    actorId imdb = a.as_object()["imdb_id"].as_string().c_str();
+    map_mutex.lock();
+    if (names.find(imdb) != names.end()) {
+      cout << "Adding " << imdb << " to " << mId << endl;
+      names[imdb].movies.insert(mId);
+      movies[mId].cast.insert(imdb);
+    }
+    map_mutex.unlock();
+  }
+  map_mutex.lock();
+  movies[mId].tmdb_refresh = std::time(0);
+  map_mutex.unlock();
+}
+
+void Db::update_titles() {
+  int count = 0;
+  for (auto &[mId, M] : movies) {
+    update_title(mId);
+    count++;
+    if (count % 50 == 0)
+      save_db();
+  }
 }
 
 void Db::register_commands(CommandConsole &console) {
@@ -452,6 +488,7 @@ void Db::register_commands(CommandConsole &console) {
   console.insert("load_graph", std::bind(&Db::load_graph, this));
   console.insert("load", std::bind(&Db::load, this));
   console.insert("save", std::bind(&Db::save, this));
+  console.insert("update_titles", std::bind(&Db::update_titles, this));
   console.insert("search", std::bind(&Db::search, this, std::placeholders::_1));
   console.insert("show", std::bind(&Db::show_results, this));
   console.insert("solve", std::bind(&Db::solve, this));

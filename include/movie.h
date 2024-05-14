@@ -17,17 +17,16 @@ class Link;
 using namespace std;
 using boost::adjacency_list, boost::vecS, boost::undirectedS;
 
-typedef string movieId;
+typedef int movieId;
 typedef adjacency_list<vecS, vecS, undirectedS, movieId, Link> graph;
 typedef graph::vertex_descriptor gnode_descr;
-typedef string actorId;
+typedef int actorId;
 
 class Movie {
 public:
   Movie(movieId _id, int tmdb, string _name, int _year, int _rating = 0)
-      : id(_id), tmdb_id(tmdb), name(_name), year(_year), rating(_rating),
-        cast(), node(0), tmdb_refresh(0){};
-  Movie() : Movie("", 0, "", 0){};
+      : id(_id), tmdb_id(tmdb), name(_name), year(_year), rating(_rating), cast(), node(0), tmdb_refresh(0){};
+  Movie() : Movie(0, 0, "", 0){};
   movieId id;
   int tmdb_id;
   string name;
@@ -38,8 +37,8 @@ public:
   time_t tmdb_refresh;
 
   friend std::ostream &operator<<(std::ostream &os, const Movie &m) {
-    os << m.id << "," << m.tmdb_id << ",\"" << m.name << "\"," << m.year << ","
-       << m.rating << "," << m.node << "," << m.tmdb_refresh << ",[";
+    os << m.id << "," << m.tmdb_id << ",\"" << m.name << "\"," << m.year << "," << m.rating << "," << m.node << ","
+       << m.tmdb_refresh << ",[";
     for (const actorId &a : m.cast) {
       os << a << ";";
     }

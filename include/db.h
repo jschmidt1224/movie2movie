@@ -62,6 +62,7 @@ public:
   void set_start(vector<string> args);
   void set_end(vector<string> args);
   void update_title(movieId mId);
+  void update_titles();
   void register_commands(CommandConsole &console);
   gnode_descr get_node(movieId mId);
   vector<actorId> get_edges(gnode_descr a);

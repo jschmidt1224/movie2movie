@@ -8,13 +8,13 @@
 
 #include "movie.h"
 
-typedef string actorId;
+typedef int actorId;
 
 class Name {
 public:
   Name(actorId _id, int _tmdb_id, string _name) : id(_id), tmdb_id(_tmdb_id), name(_name){};
   Name(actorId _id) : Name(_id, 0, ""){};
-  Name() : Name("tt0"){};
+  Name() : Name(0){};
   actorId id;
   int tmdb_id;
   string name;
