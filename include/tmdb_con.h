@@ -10,6 +10,10 @@
 #include <mutex>
 #include <string>
 
+#define POP_MOVIES "tmp/popmovies.csv"
+#define CAST "tmp/cast.csv"
+#define PERSON "tmp/person.csv"
+
 using std::string, std::mutex, std::atomic_int, std::atomic_bool;
 
 typedef int movieId;
@@ -20,9 +24,9 @@ public:
   ~TMDBConnection();
   int get(string url, FILE *f = stdout);
   int get(string url, string filename);
-  int get_popmovies(int page = 1);
-  int get_cast(int id);
-  int get_person(int id);
+  int get_popmovies(int page = 1, int year = 2024);
+  int get_cast(movieId id);
+  int get_person(movieId id);
   void count_func();
   boost::json::value parse_file(string fname);
   static string base_url;

@@ -23,12 +23,19 @@
 #include "name.h"
 
 using boost::vertex_index, boost::predecessor_map;
+using boost::json::value;
 using std::cout;
 
-template <typename T> vector<T> split_csvlist(string l) {
-  vector<T> s;
-  boost::split(s, l, boost::is_any_of(";"));
-  return s;
+vector<int> split_csvlist(string l) {
+  vector<string> s;
+  vector<int> r;
+  cout << l << endl;
+  boost::split(s, l, boost::is_any_of(";[]"));
+  for (auto &e : s) {
+    if (!e.empty())
+      r.push_back(stoi(e));
+  }
+  return r;
 }
 
 Db::~Db() {
@@ -39,126 +46,28 @@ Db::~Db() {
   g.clear();
 }
 
-void Db::build_movies() {
-  ifstream fTitles("imdb_data/title.basics.movie.tsv");
-  string header, line;
-  int count = 0;
-
-  getline(fTitles, header);
-
-  // Reading Titles file
-  while (getline(fTitles, line)) {
-    vector<string> columns;
-    boost::split(columns, line, boost::is_any_of("\t"));
-
-    movieId id = columns[0];
-    string name = columns[2];
-    boost::replace_if(name, boost::is_any_of("\"\n\r"), ' ');
-    int year = 0;
-    if (columns[5] != "\\N")
-      year = stoi(columns[5]);
-    if (columns[3] != name) {
-      name += "(" + columns[3] + ")";
-    }
-    map_mutex.lock();
-    movies.insert({id, Movie(id, 0, name, year)});
-    map_mutex.unlock();
-    count++;
-  }
-  fTitles.close();
-  cout << "Titles: " << count << endl;
-}
-
-void Db::build_principals() {
-  ifstream fRoles("imdb_data/title.principals.roles.tsv");
-  string header, line;
-  int count = 0;
-
-  getline(fRoles, header);
-
-  while (getline(fRoles, line)) {
-    vector<string> columns;
-    boost::split(columns, line, boost::is_any_of("\t"));
-
-    movieId mid = columns[0];
-    actorId aid = columns[2];
-    string r = columns[3];
-    // If movie id is not in movies
-    map_mutex.lock();
-    if (movies.find(mid) != movies.end()) {
-      // If actor id is not in names add it
-      if (names.find(aid) == names.end())
-        names[aid] = Name(aid);
-      names[aid].movies.insert(mid);
-      movies[mid].cast.insert(aid);
-      count++;
-    }
-    map_mutex.unlock();
-  }
-  fRoles.close();
-  cout << "Roles: " << count << endl;
-}
-
-void Db::build_names() {
-  ifstream fNames("imdb_data/name.basics.tsv");
-  string header, line;
-  int count = 0;
-
-  getline(fNames, header);
-
-  while (getline(fNames, line)) {
-    vector<string> columns;
-    boost::split(columns, line, boost::is_any_of("\t"));
-
-    actorId id = columns[0];
-    string name = columns[1];
-    boost::replace_if(name, boost::is_any_of("\"'\n\r,"), ' ');
-    if (names.find(id) != names.end()) {
-      map_mutex.lock();
-      names[id].name = name;
-      map_mutex.unlock();
-      count++;
-    }
-  }
-  fNames.close();
-  cout << "Names: " << count << endl;
-}
-
-void Db::build_db() {
-  build_movies();
-  build_principals();
-  build_names();
-}
-
 void Db::save_db() {
+  int nMovies = 0, nNames = 0;
   cout << "Saving..." << endl;
-  multimap<int, movieId> byYear;
-  set<int> years;
+  ofstream of(MOVIES);
+  of << "id,name,year,rating,node,tmdb_update,cast" << endl;
   map_mutex.lock();
-  for (auto &[k, m] : movies) {
-    byYear.insert(std::make_pair(m.year, k));
-    years.insert(m.year);
+  for (auto &m : movies) {
+    of << m.second << endl;
+    nMovies++;
   }
   map_mutex.unlock();
-  ofstream of("csv_data/tt.csv");
-  of << "id,tmdb_id,name,year,rating,node,tmdb_update,cast" << endl;
-  for (auto &y : years) {
-    auto range = byYear.equal_range(y);
-    for (auto it = range.first; it != range.second; it++) {
-      map_mutex.lock();
-      of << movies[it->second] << endl;
-      map_mutex.unlock();
-    }
-  }
   of.close();
-  of.open("csv_data/nm.csv");
-  of << "id,tmdb_id,name,movies" << endl;
+  of.open(NAMES);
+  of << "id,name,movies" << endl;
   map_mutex.lock();
   for (auto &[k, a] : names) {
     of << a << endl;
+    nNames++;
   }
   map_mutex.unlock();
   of.close();
+  cout << "Movies: " << nMovies << ", Names: " << nNames << endl;
   // ofstream of("movie_cast.db");
   // boost::archive::text_oarchive oa(of);
   // oa << movies;
@@ -176,19 +85,21 @@ void Db::save_db() {
 
 void Db::load_db() {
   int count = 0;
-  string fpath = "csv_data/tt.csv";
-  rapidcsv::Document d(fpath);
+  rapidcsv::Document d(MOVIES);
+  cout << "Reading db" << endl;
   for (unsigned long i = 0; i < d.GetRowCount(); i++) {
-    movieId id = d.GetCell<string>("id", i);
-    int tmdb_id = d.GetCell<int>("tmdb_id", i);
+    movieId id = d.GetCell<movieId>("id", i);
+    cout << id << " " << endl;
     string name = d.GetCell<string>("name", i);
     int year = d.GetCell<int>("year", i);
-    int rating = d.GetCell<int>("rating", i);
+    cout << year << endl;
+    float rating = d.GetCell<float>("rating", i);
     string sActors = d.GetCell<string>("cast", i);
     unsigned long node = d.GetCell<unsigned long>("node", i);
-    vector<actorId> lActors = split_csvlist<actorId>(sActors);
+    vector<actorId> lActors = split_csvlist(sActors);
+    cout << count << " " << name << endl;
     map_mutex.lock();
-    movies[id] = Movie(id, tmdb_id, name, year, rating);
+    movies[id] = Movie(id, name, year, rating);
     movies[id].cast.insert(lActors.begin(), lActors.end());
     movies[id].node = node;
     map_mutex.unlock();
@@ -196,20 +107,16 @@ void Db::load_db() {
   }
   d.Clear();
   cout << "Titles: " << count << endl;
-  fpath = "csv_data/nm.csv";
-  d.Load(fpath);
+  d.Load(NAMES);
   count = 0;
   for (unsigned long i = 0; i < d.GetRowCount(); i++) {
-    actorId id = d.GetCell<string>("id", i);
-    int tmdb_id = d.GetCell<int>("tmdb_id", i);
+    actorId id = d.GetCell<actorId>("id", i);
     string name = d.GetCell<string>("name", i);
     string sMovies = d.GetCell<string>("movies", i);
-    vector<movieId> lMovies = split_csvlist<movieId>(sMovies);
+    vector<movieId> lMovies = split_csvlist(sMovies);
+    cout << count << " " << name << endl;
     map_mutex.lock();
-    names[id] = Name(id, tmdb_id, name);
-    if (tmdb_id != 0) {
-      names_tmdb[tmdb_id] = id;
-    }
+    names[id] = Name(id, name);
     names[id].movies.insert(lMovies.begin(), lMovies.end());
     map_mutex.unlock();
     count++;
@@ -383,8 +290,8 @@ void Db::filter(vector<string> args) {
 void Db::set_start(vector<string> args) {
   if (args.size() > 0) {
     try {
-      if (boost::starts_with(args[0], "tt")) {
-        end = movies.at(args[0]).node;
+      if (boost::starts_with(args[0], ".")) {
+        end = movies.at(atoi(args[0].c_str() + 1)).node;
       } else {
         unsigned long index = stoul(args[0]);
         if (index < results.size()) {
@@ -394,7 +301,7 @@ void Db::set_start(vector<string> args) {
         }
       }
     } catch (std::invalid_argument const &e) {
-      cout << args[0] << "not an integer\n";
+      cout << args[0] << " not an integer\n";
     } catch (std::out_of_range const &e) {
       cout << args[0] << " not found\n";
     }
@@ -404,8 +311,8 @@ void Db::set_start(vector<string> args) {
 void Db::set_end(vector<string> args) {
   if (args.size() > 0) {
     try {
-      if (boost::starts_with(args[0], "tt")) {
-        start = movies.at(args[0]).node;
+      if (boost::starts_with(args[0], ".")) {
+        start = movies.at(atoi(args[0].c_str() + 1)).node;
       } else {
 
         unsigned long index = stoul(args[0]);
@@ -423,64 +330,70 @@ void Db::set_end(vector<string> args) {
   }
 }
 
-void Db::update_title(movieId mId) {
-  cout << "Updating: " << mId << endl;
-  map_mutex.lock();
-  int tId = movies[mId].tmdb_id;
-  map_mutex.unlock();
-  if (tId == 0) {
-    if (tmdb.get_imdb(mId) != 0)
-      return;
-    boost::json::value v = tmdb.parse_file("tmp/find.json");
-    try {
-      auto &a = v.at("movie_results").as_array();
-      if (a.size() > 0) {
-        tId = a[0].at("id").as_int64();
-      } else {
-        cout << "Not found" << endl;
-        return;
-      }
-    } catch (exception &e) {
-      cout << "Exception " << e.what() << endl;
-      return;
-    }
-    map_mutex.lock();
-    movies[mId].tmdb_id = tId;
-    map_mutex.unlock();
-  }
-  cout << "Getting Cast: " << tId << endl;
-  if (tmdb.get_cast(tId) != 0)
-    return;
-  boost::json::value v = tmdb.parse_file("tmp/cast.json");
-  auto cast = v.as_object()["cast"].as_array();
-  for (auto &a : cast) {
-    cout << a << endl;
-    actorId imdb = a.as_object()["imdb_id"].as_string().c_str();
-    map_mutex.lock();
-    if (names.find(imdb) != names.end()) {
-      cout << "Adding " << imdb << " to " << mId << endl;
-      names[imdb].movies.insert(mId);
-      movies[mId].cast.insert(imdb);
-    }
-    map_mutex.unlock();
-  }
-  map_mutex.lock();
-  movies[mId].tmdb_refresh = std::time(0);
-  map_mutex.unlock();
-}
-
 void Db::update_titles() {
   int count = 0;
-  for (auto &[mId, M] : movies) {
-    update_title(mId);
-    count++;
-    if (count % 50 == 0)
-      save_db();
+  int total_pages = 10;
+  int year = 2024;
+  for (; year >= 1900; year--) {
+    cout << "Year: " << year << endl;
+    for (int current_page = 1; current_page <= total_pages; current_page++) {
+      cout << "Getting Page: " << current_page << endl;
+      tmdb.get_popmovies(current_page, year);
+      value v = tmdb.parse_file(POP_MOVIES);
+      if (v.as_object().contains("success")) {
+        if (v.at("success").as_bool() == false) {
+          cout << v << endl;
+          return;
+        }
+      }
+      v = v.at("results");
+      for (auto &m : v.as_array()) {
+        movieId id = m.at("id").as_int64();
+        string name = m.at("title").as_string().c_str();
+        string date = m.at("release_date").as_string().c_str();
+        int votes = m.at("vote_count").as_int64();
+        double rating = m.at("vote_average").as_double();
+        vector<string> tmp;
+        boost::split(tmp, date, boost::is_any_of("-"));
+        int year = stoi(tmp[0]);
+        // cout << name << endl;
+        map_mutex.lock();
+        if (movies.find(id) == movies.end()) {
+          movies[id] = Movie(id, name, year, rating, votes);
+          count++;
+        } else {
+          movies[id].name = name;
+          movies[id].year = year;
+          movies[id].rating = rating;
+          movies[id].votes = votes;
+        }
+        movies[id].tmdb_refresh = std::time(0);
+        map_mutex.unlock();
+        update_credits(id);
+      }
+    }
+    save_db();
+  }
+}
+
+void Db::update_credits(movieId movie) {
+  tmdb.get_cast(movie);
+  value v = tmdb.parse_file(CAST);
+  for (auto &a : v.at("cast").as_array()) {
+    actorId id = a.at("id").as_int64();
+    string name = a.at("name").as_string().c_str();
+    // cout << id << ": " << name << endl;
+    map_mutex.lock();
+    if (names.find(id) == names.end()) {
+      names[id] = Name(id, name);
+    }
+    names[id].movies.insert(movie);
+    movies[movie].cast.insert(id);
+    map_mutex.unlock();
   }
 }
 
 void Db::register_commands(CommandConsole &console) {
-  console.insert("build_db", std::bind(&Db::build_db, this));
   console.insert("build_graph", std::bind(&Db::build_graph, this));
   console.insert("save_db", std::bind(&Db::save_db, this));
   console.insert("load_db", std::bind(&Db::load_db, this));

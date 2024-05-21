@@ -13,6 +13,9 @@
 #include "name.h"
 #include "tmdb_con.h"
 
+#define MOVIES "csv_data/movies.csv"
+#define NAMES "csv_data/names.csv"
+
 typedef adjacency_list<vecS, vecS, undirectedS, movieId, Link> graph_t;
 typedef graph_t::vertex_descriptor gnode_descr;
 
@@ -37,10 +40,6 @@ public:
   thread update_existing;
   thread update_popular;
   mutex map_mutex;
-  void build_movies();
-  void build_principals();
-  void build_names();
-  void build_db();
   void save_db();
   void load_db();
   void build_graph();
@@ -51,18 +50,14 @@ public:
   void solve_graph();
   void print_path(gnode_descr end);
   void solve();
-  void write_movies();
-  void write_names();
-  void read_movies();
-  void read_names();
   void show_results();
   void search(vector<string> args);
   void filter(vector<string> args);
   void filter_year(vector<string> args);
   void set_start(vector<string> args);
   void set_end(vector<string> args);
-  void update_title(movieId mId);
   void update_titles();
+  void update_credits(movieId movie);
   void register_commands(CommandConsole &console);
   gnode_descr get_node(movieId mId);
   vector<actorId> get_edges(gnode_descr a);
