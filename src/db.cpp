@@ -29,7 +29,6 @@ using std::cout;
 vector<int> split_csvlist(string l) {
   vector<string> s;
   vector<int> r;
-  cout << l << endl;
   boost::split(s, l, boost::is_any_of(";[]"));
   for (auto &e : s) {
     if (!e.empty())
@@ -89,15 +88,12 @@ void Db::load_db() {
   cout << "Reading db" << endl;
   for (unsigned long i = 0; i < d.GetRowCount(); i++) {
     movieId id = d.GetCell<movieId>("id", i);
-    cout << id << " " << endl;
     string name = d.GetCell<string>("name", i);
     int year = d.GetCell<int>("year", i);
-    cout << year << endl;
     float rating = d.GetCell<float>("rating", i);
     string sActors = d.GetCell<string>("cast", i);
     unsigned long node = d.GetCell<unsigned long>("node", i);
     vector<actorId> lActors = split_csvlist(sActors);
-    cout << count << " " << name << endl;
     map_mutex.lock();
     movies[id] = Movie(id, name, year, rating);
     movies[id].cast.insert(lActors.begin(), lActors.end());
@@ -114,7 +110,6 @@ void Db::load_db() {
     string name = d.GetCell<string>("name", i);
     string sMovies = d.GetCell<string>("movies", i);
     vector<movieId> lMovies = split_csvlist(sMovies);
-    cout << count << " " << name << endl;
     map_mutex.lock();
     names[id] = Name(id, name);
     names[id].movies.insert(lMovies.begin(), lMovies.end());
@@ -332,14 +327,19 @@ void Db::set_end(vector<string> args) {
 
 void Db::update_titles() {
   int count = 0;
-  int total_pages = 10;
+  int last_save = 0;
+  int total_pages = 500;
   int year = 2024;
   for (; year >= 1900; year--) {
     cout << "Year: " << year << endl;
+    total_pages = 500;
     for (int current_page = 1; current_page <= total_pages; current_page++) {
       cout << "Getting Page: " << current_page << endl;
       tmdb.get_popmovies(current_page, year);
       value v = tmdb.parse_file(POP_MOVIES);
+      if (v.at("total_pages").as_int64() < total_pages) {
+        total_pages = v.at("total_pages").as_int64();
+      }
       if (v.as_object().contains("success")) {
         if (v.at("success").as_bool() == false) {
           cout << v << endl;
@@ -371,8 +371,11 @@ void Db::update_titles() {
         map_mutex.unlock();
         update_credits(id);
       }
+      if (count - 100 > last_save) {
+        save_db();
+        last_save = count;
+      }
     }
-    save_db();
   }
 }
 
